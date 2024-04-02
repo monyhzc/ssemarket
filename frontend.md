@@ -28,7 +28,7 @@
   ```
 
 - 进入仓库，并新建 `nginx.conf`。你也可以从 [这里](https://gitee.com/yang-peiyue/sse_market_mobile/blob/online/nginx.conf) 找到它。
-  ```bash
+  ```nginx
   worker_processes  1;
   events {
     worker_connections  1024;
@@ -203,7 +203,7 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
 
 - 重新回到仓库中。新建 `compose.yml`
 
-  ```
+  ```yaml
   services:
     sse_market_client_mobile:
       image: sse_market_client-mobile:latest
@@ -251,7 +251,7 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
   ```
   这个部分是检验登录状态并强制跳转登录页，反正我是深受其害。将 `store.state.userModule.token` 改为 `1` 即可。
 
-- 部署，如果一切顺利你会看到类似下面的输出。反正我感觉这一步挺慢的，可以去干点别的
+- 部署，如果一切顺利你会看到类似下面的输出。反正我感觉这一步挺慢的，可以去干点别的。`docker compose up` 将会在命令行显式打印日志（推荐），`docker compose up -d` 将在后台静默运行。
   ```bash
   $ docker compose up
 
@@ -271,7 +271,7 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
   然后在浏览器中访问 `localhost:81`，可能会报危险，因为这是自签的证书。忽略危险继续访问，应该可以看到主页。
 
 - 也可以在宿主机上访问（推荐）。
-  ```bash
+  ```nginx
   $ ifconfig
   ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         inet 192.168.***.***  netmask 255.255.255.0  broadcast 192.168.***.255
@@ -279,7 +279,7 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
   在宿主机的浏览器上输入 inet 的网址加端口。至于网卡怎么看，应该大部分长的都和 ens33 差不多，反正一定不是 `lo` 或者带 `docker` 的。有用 `ufw` 的记得放行端口。
 
 - 至于接入到软工集市主站的api，我尝试过在仓库根目录下修改 `.env.development` 的内容为
-  ```
+  ```js
   VUE_APP_BASE_URL = https://ssemarket.cn:8080/api/
   ```
   但是似乎并没有成功。·
@@ -290,6 +290,60 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
 
 - 按 F12 或者 右键检查元素 弹出开发者界面，找到 lighthouse。大概长这样。
 
-  ![lighthouse](./lighthouse.jpg)
+  ![lighthouse](./frontend/lighthouse.jpg)
 
-- 生成报告。比如我以主站为对象生成的报告在 [这里](./lighthouse_mb.html)
+- 生成报告。比如我以主站为对象生成的报告在 [这里](./frontend/lighthouse_mb.html)，本地的报告在 [这里](./frontend/local_1.html)。
+
+- 由于本地延迟低、电脑性能比服务器高、没有数据等原因，本地的评分肯定显著高于主站的评分，这是正常的。但是报告反映的问题是共同的。
+
+## Part 3: 根据报告进行性能优化
+
+- 在当前阶段，我们主要关心性能（`Performance` 分数），尤其是前端与服务器相关的性能。因为目前同学们的设备性能与校园网络覆盖普遍较高（基本不会出现使用90年代设备或者2G网络的情况）。反映到项目，即使我们的 `Render Delay` 普遍比较高，但是感知不强。
+
+- 但如果在涉及通讯的部分，比如动辄请求几个M的数据，并发数甚至还不是太多就会崩溃。（服务器的带宽是 4Mbps）
+
+- 注意区分 `ssemarket.cn` 和其他网站的请求。比如 `yzcdn.cn` 就是项目中使用的 vant 的资源库。
+
+这里以 `performance diagnosics` 里排名第一的热点为例。显示如下：
+
+---
+### Enable text compression —— Potential savings of 466 KiB
+Text-based resources should be served with compression (gzip, deflate or brotli) to minimize total network bytes.
+
+| URL | Transfer Size  | Potential Savings |
+| ---- | ---- | --- |
+| 192.168.221.137   | 677.6 KiB | 466.0 KiB |
+| /js/chunk-vendors.783782b0.js | 478.3 KiB | 327.1 KiB |
+| /css/chunk-vendors.6589e2d8.css | 150.4 KiB | 106.2 KiB |
+| /js/app.d230c858.js | 36.4 KiB | 23.9 KiB |
+| /js/307.b275a187.js | 12.6 KiB | 8.8 KiB |
+
+---
+
+可以看到这里提示 `js` `css` 等静态文件传输花费较大。尝试使用 `gzip` 对静态文件进行压缩。
+
+我使用了以前搭建静态博客的方法，在 `nginx` 上开启压缩，优点是不需要对代码进行过多的改动，缺点是会对 `nginx` 造成额外压力。考虑到服务器瓶颈主要在吞吐上，`nginx` 多一点的压力是可以接受的。当然也有别的方法，比如在编译期就预先生成压缩文件，将压力转移到编译期，~~但是我对项目整体不是很熟悉不敢乱搞~~。
+
+`nginx` 额外配置如下，将对纯文本和前端静态文件进行压缩：
+```nginx
+gzip on;
+gzip_types text/plain text/css application/json application/javascript text/javascript;
+gzip_min_length 1000;
+gzip_comp_level 6;
+gzip_vary on;
+```
+
+重新部署，[跑分](./frontend/local_2.html)。`Performance` 从 $57$ 到了 $77$，并且在 `SI / FCP / LCP` 的细项分都有显著提升。
+
+在 Network 中查看流量
+
+| 文件 | 原大小 | 压缩后大小 |
+| --- | --- | --- |
+| chunk-vendors.783782b0.js| 478.3 KiB | 155KiB |
+| chunk-vendors.6589e2d8.css | 150.4 KiB | 45.6KiB |
+| app.d230c858.js | 36.4 KiB | 13.0KiB |
+| 307.b275a187.js | 12.6 KiB | 4.2kB |
+
+压缩率在 $1/3$ 左右。
+
+左看右看，好像没有问题。~~应该不会爆炸吧~~
