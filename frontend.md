@@ -20,7 +20,7 @@
 
 - docker
 
-## Part 1: 
+## Part 1: 前端仓库部署
 
 - 拉取仓库分支，此处以 mobile 的 master 分支为例
   ```bash
@@ -221,13 +221,35 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
   ```
   其中 `~/test/Nginx` 替换成刚才你选择的那个文件夹的路径
 
-
-
-- 在仓库根目录下修改 `.env.development` 的内容为
+- 进入 `src/router` 目录，修改 `index.js`。你会看到长成这样的东西。
+  ```js
+  {
+    path: '/',
+    name: 'home',
+    meta: {
+      auth: true,
+      keepAlive: true,
+    },
+    component: () => import('../views/home/HomeView.vue'),
+  },
   ```
-  VUE_APP_BASE_URL = https://ssemarket.cn:8080/api/
+  将 `auth: true,` 注释掉即可开启一个部分的游客模式。
+  ```js
+  router.beforeEach((to, from, next) => {
+    if (to.meta.auth) {
+      if (store.state.userModule.token) {
+        store.commit('getNoticesNum');
+        next();
+      } else {
+        Toast.fail('请先登录');
+        if (from.name !== 'logintest') router.push({ name: 'logintest' });
+      }
+    } else {
+      next();
+    }
+  });
   ```
-  这是接入到软工集市主站的api。
+  这个部分是检验登录状态并强制跳转登录页，反正我是深受其害。将 `store.state.userModule.token` 改为 `1` 即可。
 
 - 部署，如果一切顺利你会看到类似下面的输出。反正我感觉这一步挺慢的，可以去干点别的
   ```bash
@@ -246,4 +268,28 @@ bNMpD1ludNZt4WLKV6F3eCrJyAT5CU9HfP4bMdi3J/oJPdL61qPN
   cilent_mobile  | /docker-entrypoint.sh: Configuration complete; ready for start up
   ```
 
-  然后在浏览器中访问 `localhost:81`，可能会报危险，因为这是自签的证书。忽略危险继续访问，应该可以看到登录页面。
+  然后在浏览器中访问 `localhost:81`，可能会报危险，因为这是自签的证书。忽略危险继续访问，应该可以看到主页。
+
+- 也可以在宿主机上访问（推荐）。
+  ```bash
+  $ ifconfig
+  ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.***.***  netmask 255.255.255.0  broadcast 192.168.***.255
+  ```
+  在宿主机的浏览器上输入 inet 的网址加端口。至于网卡怎么看，应该大部分长的都和 ens33 差不多，反正一定不是 `lo` 或者带 `docker` 的。有用 `ufw` 的记得放行端口。
+
+- 至于接入到软工集市主站的api，我尝试过在仓库根目录下修改 `.env.development` 的内容为
+  ```
+  VUE_APP_BASE_URL = https://ssemarket.cn:8080/api/
+  ```
+  但是似乎并没有成功。·
+
+## Part 2: 使用 lighthouse 进行性能分析
+
+推荐使用 chromium 内核的浏览器。比如 chrome 自带 lighthouse
+
+- 按 F12 或者 右键检查元素 弹出开发者界面，找到 lighthouse。大概长这样。
+
+  ![lighthouse](./lighthouse.jpg)
+
+- 生成报告。比如我以主站为对象生成的报告在 [这里](./lighthouse_mb.html)
