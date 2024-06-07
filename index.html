@@ -3,30 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POST</title>
+    <title>Title</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
-    <textarea id="requestData" rows="5" cols="50"></textarea><br>
-    <button onclick="sendPostRequest()">POST</button><br>
-    <div id="response"></div>
-    <script>
-        function sendPostRequest() {
+    <div class="bg-zinc-900 text-white min-h-screen p-4">
+        <header class="flex items-center justify-between mb-4">
+            <div class="flex items-center">
+                <img src="https://placehold.co/50" alt="Logo" class="h-10 w-10 mr-2" />
+                <h1 class="text-2xl font-bold">
+                    SYSU-SSE
+                </h1>
+            </div>
+            <button class="bg-zinc-800 text-white px-4 py-2 rounded-lg" onclick="redirectToPost()">
+                发布
+            </button>
+        </header>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Your existing content for Latest Threads and Categories -->
+        </div>
+        <div id="latestPosts" class="bg-zinc-800 p-4 rounded-lg mt-4">
+            <!-- Content for Latest Posts will be dynamically added here -->
+        </div>
+        <button id="loadMoreBtn" class="bg-zinc-800 text-white px-3 py-1 rounded-lg mt-4" onclick="loadFunction()">
+            Load More
+        </button>
+        <footer class="mt-4 text-center text-zinc-400">
+            TestPage @Mony
+        </footer>
+    </div>
+    <script type="text/javascript">
+
+        function redirectToPost() {
+            window.location.href = "./post.html";
+        }
+
+        var postCount = -1;
+        var url = "https://ssemarket.cn:8080/api/auth/getPostNum";
+        var requestData = `{"userTelephone":"13551412345","partition":"","searchsort":"home"}`;
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var postData = JSON.parse(xhr.responseText);
+                    postCount = postData.Postcount + 54;
+                    }
+                } else {
+                console.error('Error fetching posts:', xhr.status);
+            }
+        }
+        xhr.send(requestData);
+
+        function loadMorePosts() {
+            const latestPosts = document.getElementById('latestPosts');
             var url = "https://ssemarket.cn:8080/api/auth/showDetails";
-            var requestData = document.getElementById("requestData").value;
+            var requestData = `{"userTelephone":"13551412345","postId":${postCount}}`;
             var xhr = new XMLHttpRequest();
             xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-Type", "application/json");
             xhr.onreadystatechange = function () {
                 if (xhr.readyState === XMLHttpRequest.DONE) {
                     if (xhr.status === 200) {
-                        var response = JSON.parse(xhr.responseText);
-                        document.getElementById("response").innerHTML = "<pre>" + JSON.stringify(response, null, 2) + "</pre>";
-                    } else {
-                        document.getElementById("response").innerHTML = "Error: " + xhr.status;
+                        var postData = JSON.parse(xhr.responseText);
+                        const newPost = `
+                            <br/>
+                            <div class="flex items-center">
+                                <img src="${postData.UserAvatar}" alt="Post Image" class="w-12 h-12 rounded-full">
+                                <div class="ml-4">
+                                    <h3 class="text-lg font-bold">
+                                        ${postData.Title}
+                                    </h3>
+                                    <p class="text-sm">
+                                        Posted by ${postData.UserName}
+                                    </p>
+                                </div>
+                            </div>
+                            <p class="mt-2">
+                                ${postData.Content}
+                            <br/><br/></p>
+                        `;
+                        latestPosts.innerHTML += newPost;
                     }
+                } else {
+                    console.error('Error fetching posts:', xhr.status);
                 }
-            };
+            }
             xhr.send(requestData);
+            postCount --;
+        }
+        function makeLink() {
+            const elements = document.getElementsByClassName("latestPosts");
+            for (let i = 0; i < elements.length; i++) {
+            const content = elements[i].innerHTML;
+            const replaced = content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="text-decoration: underline;">$1</a>');
+            elements[i].innerHTML = replaced;
+            }
+        }
+        function loadFunction() {
+            for (let i = 0; i < 5; i++) {
+                loadMorePosts();
+            }
         }
     </script>
 </body>
